@@ -1,0 +1,5 @@
+{
+  "category.chunkborders": "ChunkBorders",
+  "key.chunkborders.toggle": "Afficher/masquer les bordures",
+  "key.chunkborders.radius": "Changer la zone (chunks voisins)"
+}

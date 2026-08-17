@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "chunkborders",
+  "version": "${version}",
+  "name": "ChunkBorders",
+  "description": "Affiche les bordures de chunks avec un rendu custom (remplace F3+G).",
+  "authors": ["Maitre"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "net.tropimon.chunkborders.ChunkBordersClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "minecraft": "~1.21.1",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}

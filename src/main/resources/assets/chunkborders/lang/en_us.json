@@ -1,0 +1,5 @@
+{
+  "category.chunkborders": "ChunkBorders",
+  "key.chunkborders.toggle": "Toggle chunk borders",
+  "key.chunkborders.radius": "Cycle area (neighbour chunks)"
+}
