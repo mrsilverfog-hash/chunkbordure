@@ -18,11 +18,7 @@ public class ChunkBordersClient implements ClientModInitializer {
     /** Affichage actif ou non. */
     public static boolean enabled = false;
 
-    /** 0 = chunk courant, 1 = zone 3x3, 2 = zone 5x5. */
-    public static int radius = 0;
-
     private static KeyBinding toggleKey;
-    private static KeyBinding radiusKey;
 
     @Override
     public void onInitializeClient() {
@@ -33,26 +29,12 @@ public class ChunkBordersClient implements ClientModInitializer {
                 "category.chunkborders"
         ));
 
-        radiusKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.chunkborders.radius",
-                InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_F10,
-                "category.chunkborders"
-        ));
-
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (toggleKey.wasPressed()) {
                 enabled = !enabled;
                 actionBar(client, enabled
                         ? Text.literal("Bordures de chunks : ON").formatted(Formatting.GREEN)
                         : Text.literal("Bordures de chunks : OFF").formatted(Formatting.RED));
-            }
-
-            while (radiusKey.wasPressed()) {
-                radius = (radius + 1) % 3;
-                int side = radius * 2 + 1;
-                actionBar(client, Text.literal("Bordures : zone " + side + "x" + side)
-                        .formatted(Formatting.YELLOW));
             }
         });
 

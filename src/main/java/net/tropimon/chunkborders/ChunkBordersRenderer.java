@@ -8,6 +8,7 @@ import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.Heightmap;
 import org.joml.Matrix4f;
 
 /**
@@ -23,6 +24,9 @@ public final class ChunkBordersRenderer {
     // Reglages
     // ------------------------------------------------------------------
 
+    /** Zone affichee autour du joueur : 1 = 3x3 chunks. */
+    private static final int CHUNK_RADIUS = 1;
+
     /** Epaisseur des traits, en blocs. Monte a 0.10 si tu veux encore plus gras. */
     private static final float THICKNESS = 0.06F;
 
@@ -31,6 +35,12 @@ public final class ChunkBordersRenderer {
 
     /** Espacement vertical des contours horizontaux, en blocs. */
     private static final int LEVEL_STEP = 16;
+
+    /** Longueur de chaque branche de la croix au sol, en blocs. */
+    private static final double CROSS_ARM = 1.0D;
+
+    /** Hauteur de la croix au-dessus du sol, pour eviter le z-fighting. */
+    private static final double CROSS_OFFSET = 0.02D;
 
     private ChunkBordersRenderer() {
     }
@@ -66,11 +76,20 @@ public final class ChunkBordersRenderer {
         Matrix4f m = matrices.peek().getPositionMatrix();
 
         ChunkPos center = mc.player.getChunkPos();
-        int r = ChunkBordersClient.radius;
-        for (int dx = -r; dx <= r; dx++) {
-            for (int dz = -r; dz <= r; dz++) {
+
+        for (int dx = -CHUNK_RADIUS; dx <= CHUNK_RADIUS; dx++) {
+            for (int dz = -CHUNK_RADIUS; dz <= CHUNK_RADIUS; dz++) {
                 drawChunk(vc, m, new ChunkPos(center.x + dx, center.z + dz),
                         bottom, top, dx == 0 && dz == 0);
+            }
+        }
+
+        // Croix au sol a chaque intersection de 4 chunks. On parcourt les
+        // sommets de la grille (un de plus que les chunks dans chaque sens)
+        // pour ne dessiner chaque coin qu'une seule fois.
+        for (int cx = center.x - CHUNK_RADIUS; cx <= center.x + CHUNK_RADIUS + 1; cx++) {
+            for (int cz = center.z - CHUNK_RADIUS; cz <= center.z + CHUNK_RADIUS + 1; cz++) {
+                drawGroundCross(vc, m, mc, cx * 16, cz * 16);
             }
         }
 
@@ -111,6 +130,31 @@ public final class ChunkBordersRenderer {
             }
             square(vc, m, x0, z0, x1, z1, y, 1.0F, 0.95F, 0.15F, ha);
         }
+    }
+
+    /**
+     * Croix rouge posee au sol, centree sur le point ou 4 chunks se rejoignent.
+     * Chaque branche fait CROSS_ARM bloc dans une direction.
+     */
+    private static void drawGroundCross(VertexConsumer vc, Matrix4f m, MinecraftClient mc,
+                                        int blockX, int blockZ) {
+        int ground = mc.world.getTopY(Heightmap.Type.WORLD_SURFACE, blockX, blockZ);
+        double y = ground + CROSS_OFFSET;
+
+        float h = THICKNESS / 2.0F;
+        float r = 1.0F, g = 0.20F, b = 0.15F, a = 1.0F;
+
+        // Branche est-ouest.
+        box(vc, m,
+                blockX - CROSS_ARM, y - h, blockZ - h,
+                blockX + CROSS_ARM, y + h, blockZ + h,
+                r, g, b, a);
+
+        // Branche nord-sud.
+        box(vc, m,
+                blockX - h, y - h, blockZ - CROSS_ARM,
+                blockX + h, y + h, blockZ + CROSS_ARM,
+                r, g, b, a);
     }
 
     // ------------------------------------------------------------------

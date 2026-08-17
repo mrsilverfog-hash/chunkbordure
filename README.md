@@ -7,7 +7,8 @@ en remplacement du F3+G vanilla (cassé avec Sodium/Iris).
 | Touche | Effet |
 |--------|-------|
 | F9     | Afficher / masquer les bordures |
-| F10    | Zone affichée : 1x1 → 3x3 → 5x5 chunks |
+
+Zone affichée : 3x3 chunks autour du joueur (constante `CHUNK_RADIUS`).
 
 Rebindables dans Options → Commandes → catégorie « ChunkBorders ».
 
@@ -15,6 +16,7 @@ Rebindables dans Options → Commandes → catégorie « ChunkBorders ».
 - Traits **jaunes** : les 4 coins du chunk, sur toute la hauteur du monde
 - Traits **cyan** : verticales intermédiaires tous les 4 blocs le long des bords
 - Contours **jaunes horizontaux** : tous les 16 blocs de hauteur, ils relient les verticales
+- Croix **rouge** posée au sol à chaque intersection de 4 chunks, une branche d'un bloc dans chaque direction
 
 Tout est dessiné en quads (petits pavés), pas en lignes GL — c'est ce qui rend
 le mod compatible Sodium/Iris et ce qui permet de régler l'épaisseur.
@@ -24,6 +26,8 @@ Dans `ChunkBordersRenderer.java`, en haut du fichier :
 - `THICKNESS` (0.06) — épaisseur des traits en blocs
 - `VERTICAL_STEP` (4) — espacement des verticales secondaires
 - `LEVEL_STEP` (16) — espacement vertical des contours horizontaux
+- `CHUNK_RADIUS` (1) — 1 = zone 3x3
+- `CROSS_ARM` (1.0) — longueur des branches de la croix au sol
 
 ## Build
 Push → onglet Actions → workflow « Build ChunkBorders » → artefact `ChunkBorders`.
