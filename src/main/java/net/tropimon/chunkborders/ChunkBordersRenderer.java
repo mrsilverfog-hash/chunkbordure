@@ -21,11 +21,13 @@ import org.joml.Matrix4f;
 /**
  * Rendu custom des bordures de chunks.
  *
- * Deux choix importants :
+ * Trois choix importants :
  *  - tout est dessine en quads (petits paves) et non en lignes GL, qui cassent
  *    avec Sodium/Iris et rendent le F3+G vanilla invisible ;
  *  - le rendu se fait a la main via Tessellator, sans test de profondeur, pour
- *    que les traits restent visibles a travers les blocs (indispensable sous terre).
+ *    que les traits restent visibles a travers les murs ;
+ *  - mais la hauteur affichee est bornee au sol sous les pieds et au plafond
+ *    au-dessus de la tete, pour ne pas voir a travers le plancher ni le toit.
  */
 public final class ChunkBordersRenderer {
 
@@ -42,20 +44,14 @@ public final class ChunkBordersRenderer {
     /** Espacement des verticales secondaires le long des bords, en blocs. */
     private static final int VERTICAL_STEP = 4;
 
-    /** Espacement vertical des contours horizontaux, en blocs. */
-    private static final int LEVEL_STEP = 16;
-
-    /** Hauteur affichee au-dessus et en dessous du joueur, en blocs (1 chunk). */
+    /** Hauteur maximale affichee au-dessus et en dessous du joueur, en blocs. */
     private static final int VERTICAL_RANGE = 16;
 
     /** Longueur de chaque branche de la croix au sol, en blocs. */
     private static final double CROSS_ARM = 1.0D;
 
-    /** Hauteur de la croix au-dessus du sol, pour eviter le z-fighting. */
-    private static final double CROSS_OFFSET = 0.02D;
-
-    /** Profondeur de recherche du sol sous les pieds du joueur, en blocs. */
-    private static final int GROUND_SCAN = 32;
+    /** Decalage vertical des elements poses au sol, pour eviter le z-fighting. */
+    private static final double GROUND_OFFSET = 0.02D;
 
     private ChunkBordersRenderer() {
     }
@@ -80,18 +76,26 @@ public final class ChunkBordersRenderer {
         }
 
         Vec3d cam = context.camera().getPos();
+        ClientWorld world = mc.world;
 
-        // Fenetre verticale : un chunk au-dessus, un chunk en dessous du joueur.
-        double eyeY = mc.player.getEyeY();
-        double lo = Math.max(mc.world.getBottomY(), eyeY - VERTICAL_RANGE);
-        double hi = Math.min(mc.world.getTopY(), eyeY + VERTICAL_RANGE);
+        int feet = MathHelper.floor(mc.player.getY());
+        int px = MathHelper.floor(mc.player.getX());
+        int pz = MathHelper.floor(mc.player.getZ());
+
+        // La fenetre verticale s'arrete au sol et au plafond de l'endroit ou
+        // tu te trouves : rien ne traverse le plancher ni le toit.
+        double lo = findGround(world, px, pz, feet);
+        double hi = findCeiling(world, px, pz, feet + 2, feet + VERTICAL_RANGE);
+        if (hi <= lo + 1.0D) {
+            hi = lo + 1.0D;
+        }
 
         matrices.push();
         matrices.translate(-cam.x, -cam.y, -cam.z);
         Matrix4f m = matrices.peek().getPositionMatrix();
 
         // Etat GL : pas de test de profondeur, pas d'ecriture dans le depth
-        // buffer, pas de culling. Les traits passent donc a travers les blocs.
+        // buffer, pas de culling. Les traits traversent donc les murs.
         RenderSystem.setShader(GameRenderer::getPositionColorProgram);
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
@@ -107,17 +111,16 @@ public final class ChunkBordersRenderer {
         for (int dx = -CHUNK_RADIUS; dx <= CHUNK_RADIUS; dx++) {
             for (int dz = -CHUNK_RADIUS; dz <= CHUNK_RADIUS; dz++) {
                 drawChunk(buffer, m, new ChunkPos(center.x + dx, center.z + dz),
-                        lo, hi, eyeY, dx == 0 && dz == 0);
+                        lo, hi, dx == 0 && dz == 0);
             }
         }
 
         // Croix au sol a chaque intersection de 4 chunks. On parcourt les
         // sommets de la grille (un de plus que les chunks dans chaque sens)
         // pour ne dessiner chaque coin qu'une seule fois.
-        int feet = MathHelper.floor(mc.player.getY());
         for (int cx = center.x - CHUNK_RADIUS; cx <= center.x + CHUNK_RADIUS + 1; cx++) {
             for (int cz = center.z - CHUNK_RADIUS; cz <= center.z + CHUNK_RADIUS + 1; cz++) {
-                drawGroundCross(buffer, m, mc.world, cx * 16, cz * 16, feet);
+                drawGroundCross(buffer, m, world, cx * 16, cz * 16, feet);
             }
         }
 
@@ -132,7 +135,7 @@ public final class ChunkBordersRenderer {
     }
 
     private static void drawChunk(VertexConsumer vc, Matrix4f m, ChunkPos pos,
-                                  double lo, double hi, double eyeY, boolean isCenter) {
+                                  double lo, double hi, boolean isCenter) {
         double x0 = pos.getStartX();
         double z0 = pos.getStartZ();
         double x1 = x0 + 16.0D;
@@ -140,7 +143,7 @@ public final class ChunkBordersRenderer {
 
         float alpha = isCenter ? 1.0F : 0.75F;
 
-        // Coins du chunk : jaune, pleine hauteur.
+        // Coins du chunk : jaune.
         vLine(vc, m, x0, z0, lo, hi, 1.0F, 0.95F, 0.15F, alpha);
         vLine(vc, m, x1, z0, lo, hi, 1.0F, 0.95F, 0.15F, alpha);
         vLine(vc, m, x0, z1, lo, hi, 1.0F, 0.95F, 0.15F, alpha);
@@ -155,19 +158,11 @@ public final class ChunkBordersRenderer {
             vLine(vc, m, x1, z0 + i, lo, hi, 0.20F, 0.75F, 1.0F, ia);
         }
 
-        // Contours horizontaux qui relient les verticales, alignes sur la
-        // grille de sections (multiples de 16).
-        float ha = alpha * 0.7F;
-        int first = (int) (Math.floor(lo / LEVEL_STEP) * LEVEL_STEP);
-        for (int y = first; y <= hi; y += LEVEL_STEP) {
-            if (y < lo) {
-                continue;
-            }
-            square(vc, m, x0, z0, x1, z1, y, 1.0F, 0.95F, 0.15F, ha);
-        }
+        // Contour blanc au sol : le repere principal.
+        square(vc, m, x0, z0, x1, z1, lo + GROUND_OFFSET, 1.0F, 1.0F, 1.0F, alpha);
 
-        // Contour a hauteur des yeux : le repere principal.
-        square(vc, m, x0, z0, x1, z1, eyeY, 1.0F, 1.0F, 1.0F, alpha);
+        // Contour haut, discret, pour fermer la boite.
+        square(vc, m, x0, z0, x1, z1, hi, 1.0F, 0.95F, 0.15F, alpha * 0.5F);
     }
 
     /**
@@ -177,7 +172,7 @@ public final class ChunkBordersRenderer {
      */
     private static void drawGroundCross(VertexConsumer vc, Matrix4f m, ClientWorld world,
                                         int blockX, int blockZ, int feetY) {
-        double y = findGround(world, blockX, blockZ, feetY) + CROSS_OFFSET;
+        double y = findGround(world, blockX, blockZ, feetY) + GROUND_OFFSET;
 
         float h = THICKNESS / 2.0F;
         float r = 1.0F, g = 0.20F, b = 0.15F, a = 1.0F;
@@ -197,7 +192,7 @@ public final class ChunkBordersRenderer {
 
     /** Premier bloc non vide sous {@code startY} : renvoie le dessus de ce bloc. */
     private static int findGround(ClientWorld world, int x, int z, int startY) {
-        int min = Math.max(world.getBottomY(), startY - GROUND_SCAN);
+        int min = Math.max(world.getBottomY(), startY - VERTICAL_RANGE);
         BlockPos.Mutable pos = new BlockPos.Mutable();
         for (int y = startY; y >= min; y--) {
             pos.set(x, y - 1, z);
@@ -205,7 +200,20 @@ public final class ChunkBordersRenderer {
                 return y;
             }
         }
-        return startY;
+        return min;
+    }
+
+    /** Premier bloc non vide au-dessus de {@code startY}, plafonne a {@code max}. */
+    private static int findCeiling(ClientWorld world, int x, int z, int startY, int max) {
+        int limit = Math.min(world.getTopY(), max);
+        BlockPos.Mutable pos = new BlockPos.Mutable();
+        for (int y = startY; y <= limit; y++) {
+            pos.set(x, y, z);
+            if (!world.getBlockState(pos).isAir()) {
+                return y;
+            }
+        }
+        return limit;
     }
 
     // ------------------------------------------------------------------
