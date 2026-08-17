@@ -45,6 +45,9 @@ public final class ChunkBordersRenderer {
     /** Espacement vertical des contours horizontaux, en blocs. */
     private static final int LEVEL_STEP = 16;
 
+    /** Hauteur affichee au-dessus et en dessous du joueur, en blocs (1 chunk). */
+    private static final int VERTICAL_RANGE = 16;
+
     /** Longueur de chaque branche de la croix au sol, en blocs. */
     private static final double CROSS_ARM = 1.0D;
 
@@ -77,8 +80,11 @@ public final class ChunkBordersRenderer {
         }
 
         Vec3d cam = context.camera().getPos();
-        double bottom = mc.world.getBottomY();
-        double top = mc.world.getTopY();
+
+        // Fenetre verticale : un chunk au-dessus, un chunk en dessous du joueur.
+        double eyeY = mc.player.getEyeY();
+        double lo = Math.max(mc.world.getBottomY(), eyeY - VERTICAL_RANGE);
+        double hi = Math.min(mc.world.getTopY(), eyeY + VERTICAL_RANGE);
 
         matrices.push();
         matrices.translate(-cam.x, -cam.y, -cam.z);
@@ -101,7 +107,7 @@ public final class ChunkBordersRenderer {
         for (int dx = -CHUNK_RADIUS; dx <= CHUNK_RADIUS; dx++) {
             for (int dz = -CHUNK_RADIUS; dz <= CHUNK_RADIUS; dz++) {
                 drawChunk(buffer, m, new ChunkPos(center.x + dx, center.z + dz),
-                        bottom, top, dx == 0 && dz == 0);
+                        lo, hi, eyeY, dx == 0 && dz == 0);
             }
         }
 
@@ -126,7 +132,7 @@ public final class ChunkBordersRenderer {
     }
 
     private static void drawChunk(VertexConsumer vc, Matrix4f m, ChunkPos pos,
-                                  double bottom, double top, boolean isCenter) {
+                                  double lo, double hi, double eyeY, boolean isCenter) {
         double x0 = pos.getStartX();
         double z0 = pos.getStartZ();
         double x1 = x0 + 16.0D;
@@ -135,29 +141,33 @@ public final class ChunkBordersRenderer {
         float alpha = isCenter ? 1.0F : 0.75F;
 
         // Coins du chunk : jaune, pleine hauteur.
-        vLine(vc, m, x0, z0, bottom, top, 1.0F, 0.95F, 0.15F, alpha);
-        vLine(vc, m, x1, z0, bottom, top, 1.0F, 0.95F, 0.15F, alpha);
-        vLine(vc, m, x0, z1, bottom, top, 1.0F, 0.95F, 0.15F, alpha);
-        vLine(vc, m, x1, z1, bottom, top, 1.0F, 0.95F, 0.15F, alpha);
+        vLine(vc, m, x0, z0, lo, hi, 1.0F, 0.95F, 0.15F, alpha);
+        vLine(vc, m, x1, z0, lo, hi, 1.0F, 0.95F, 0.15F, alpha);
+        vLine(vc, m, x0, z1, lo, hi, 1.0F, 0.95F, 0.15F, alpha);
+        vLine(vc, m, x1, z1, lo, hi, 1.0F, 0.95F, 0.15F, alpha);
 
         // Verticales intermediaires le long des 4 bords : cyan.
         float ia = alpha * 0.8F;
         for (int i = VERTICAL_STEP; i < 16; i += VERTICAL_STEP) {
-            vLine(vc, m, x0 + i, z0, bottom, top, 0.20F, 0.75F, 1.0F, ia);
-            vLine(vc, m, x0 + i, z1, bottom, top, 0.20F, 0.75F, 1.0F, ia);
-            vLine(vc, m, x0, z0 + i, bottom, top, 0.20F, 0.75F, 1.0F, ia);
-            vLine(vc, m, x1, z0 + i, bottom, top, 0.20F, 0.75F, 1.0F, ia);
+            vLine(vc, m, x0 + i, z0, lo, hi, 0.20F, 0.75F, 1.0F, ia);
+            vLine(vc, m, x0 + i, z1, lo, hi, 0.20F, 0.75F, 1.0F, ia);
+            vLine(vc, m, x0, z0 + i, lo, hi, 0.20F, 0.75F, 1.0F, ia);
+            vLine(vc, m, x1, z0 + i, lo, hi, 0.20F, 0.75F, 1.0F, ia);
         }
 
-        // Contours horizontaux qui relient les verticales.
+        // Contours horizontaux qui relient les verticales, alignes sur la
+        // grille de sections (multiples de 16).
         float ha = alpha * 0.7F;
-        int first = (int) (Math.floor(bottom / LEVEL_STEP) * LEVEL_STEP);
-        for (int y = first; y <= top; y += LEVEL_STEP) {
-            if (y < bottom) {
+        int first = (int) (Math.floor(lo / LEVEL_STEP) * LEVEL_STEP);
+        for (int y = first; y <= hi; y += LEVEL_STEP) {
+            if (y < lo) {
                 continue;
             }
             square(vc, m, x0, z0, x1, z1, y, 1.0F, 0.95F, 0.15F, ha);
         }
+
+        // Contour a hauteur des yeux : le repere principal.
+        square(vc, m, x0, z0, x1, z1, eyeY, 1.0F, 1.0F, 1.0F, alpha);
     }
 
     /**
