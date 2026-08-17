@@ -18,6 +18,8 @@ Rebindables dans Options → Commandes → catégorie « ChunkBorders ».
 - Contours **jaunes horizontaux** : tous les 16 blocs de hauteur, ils relient les verticales
 - Croix **rouge** posée au sol à chaque intersection de 4 chunks, une branche d'un bloc dans chaque direction
 
+Tout est visible **à travers les blocs** (pas de test de profondeur), pour rester lisible sous terre.
+
 Tout est dessiné en quads (petits pavés), pas en lignes GL — c'est ce qui rend
 le mod compatible Sodium/Iris et ce qui permet de régler l'épaisseur.
 
@@ -28,6 +30,7 @@ Dans `ChunkBordersRenderer.java`, en haut du fichier :
 - `LEVEL_STEP` (16) — espacement vertical des contours horizontaux
 - `CHUNK_RADIUS` (1) — 1 = zone 3x3
 - `CROSS_ARM` (1.0) — longueur des branches de la croix au sol
+- `GROUND_SCAN` (32) — profondeur de recherche du sol sous les pieds du joueur
 
 ## Build
 Push → onglet Actions → workflow « Build ChunkBorders » → artefact `ChunkBorders`.
